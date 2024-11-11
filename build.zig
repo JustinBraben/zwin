@@ -4,12 +4,19 @@ const Build = std.Build;
 const Step = std.Build.Step;
 
 const examples = [_][]const u8{
+    "helloworld",
     "view-within-a-file",
 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const zwin_mod = b.addModule("zwin", .{
+        .root_source_file = b.path("src/zwin.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
 
     const zigwin32_dep = b.dependency("zigwin32", .{});
     const zigwin32_mod = zigwin32_dep.module("zigwin32");
@@ -25,6 +32,7 @@ pub fn build(b: *std.Build) void {
 
         // Add imports and/or link libraries if necessary
         example.root_module.addImport("zigwin32", zigwin32_mod);
+        example.root_module.addImport("zwin", zwin_mod);
 
         const compile_step = b.step(example_name, "Build " ++ example_name);
         compile_step.dependOn(&b.addInstallArtifact(example, .{}).step);
