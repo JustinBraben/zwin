@@ -4,6 +4,7 @@ const Build = std.Build;
 const Step = std.Build.Step;
 
 const examples = [_][]const u8{
+    "example-window",
     "helloworld",
     "view-within-a-file",
 };
@@ -12,6 +13,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Root module to use
     const zwin_mod = b.addModule("zwin", .{
         .root_source_file = b.path("src/zwin.zig"),
         .optimize = optimize,
