@@ -4,6 +4,7 @@ const Build = std.Build;
 const Step = std.Build.Step;
 
 const examples = [_][]const u8{
+    "example-window-zwin",
     "example-window",
     "helloworld",
     "view-within-a-file",
@@ -22,6 +23,8 @@ pub fn build(b: *std.Build) void {
 
     const zigwin32_dep = b.dependency("zigwin32", .{});
     const zigwin32_mod = zigwin32_dep.module("zigwin32");
+
+    zwin_mod.addImport("zigwin32", zigwin32_mod);
 
     const examples_step = b.step("examples", "Build examples");
     inline for (examples) |example_name| {

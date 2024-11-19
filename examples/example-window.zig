@@ -62,12 +62,6 @@ fn WindowProc(
     lParam: win32.LPARAM
 ) callconv(WINAPI) win32.LRESULT {
     switch (Msg) {
-        win32.WM_CREATE => {
-            if (win32.has_window_longptr) {
-                // std.debug.assert(win32.setWindowLongPtrA(hWnd, 0, 0x1234) == 0);
-                // std.debug.assert(win32.getWindowLongPtrA(hWnd, 0) == 0x1234);
-            }
-        },
         win32.WM_DESTROY => {
             win32.PostQuitMessage(0);
             return 0;
