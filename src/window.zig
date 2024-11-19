@@ -5,12 +5,13 @@ const win32 = @import("zigwin32").everything;
 const Window = @This();
 
 instance: win32.HINSTANCE,
-window_class: win32.WNDCLASSA,
+class: win32.WNDCLASSA,
+handle: ?win32.HWND = null,
 
 pub fn init(class_name: [*:0]const u8, menu_name: [*:0]const u8) !Window {
     return .{
         .instance = win32.GetModuleHandleA(null) orelse return error.InstanceNull,
-        .window_class = .{
+        .class = .{
             .style = .{},
             .lpfnWndProc = WindowProc,
             .cbClsExtra = 0,
@@ -22,6 +23,7 @@ pub fn init(class_name: [*:0]const u8, menu_name: [*:0]const u8) !Window {
             .lpszMenuName = menu_name,
             .lpszClassName = class_name,
         },
+        .handle = null,
     };
 }
 
@@ -31,14 +33,13 @@ pub fn deinit(self: *Window) void {
 
 pub fn run(self: *Window) !void {
     // returning 0 means RegisterClassA failed
-    if (win32.RegisterClassA(&self.window_class) == 0) {
+    if (win32.RegisterClassA(&self.class) == 0) {
         std.debug.panic("RegisterClass failed with {}", .{win32.GetLastError().fmt()});
     }
 
-    var hwnd: ?win32.HWND = undefined;
-    hwnd = win32.CreateWindowExA(
+    self.handle = win32.CreateWindowExA(
         .{}, 
-        self.window_class.lpszClassName
+        self.class.lpszClassName
         , 
         "Learn to Program Windows", 
         win32.WS_OVERLAPPEDWINDOW, 
@@ -47,9 +48,9 @@ pub fn run(self: *Window) !void {
         null, 
         self.instance, 
         null
-    ) orelse std.debug.panic("CreateWindow failed with {}", .{win32.GetLastError().fmt()});
+    ) orelse return error.HandleNull;
 
-    _ = win32.ShowWindow(hwnd, .{ .SHOWNORMAL = 1});
+    _ = win32.ShowWindow(self.handle, .{ .SHOWNORMAL = 1});
 
     var msg: win32.MSG = undefined;
     while (win32.GetMessageW(&msg, null, 0, 0) != 0) {
