@@ -7,7 +7,7 @@ pub fn main() !void {
     if (hStdOut == win32.INVALID_HANDLE_VALUE) {
         win32.ExitProcess(255);
     }
-    
+
     const res = writeAll(hStdOut, "Hello, World!");
 
     if (res) |r| {

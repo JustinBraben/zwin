@@ -56,14 +56,7 @@ pub fn main() !void {
     const path_w = try windows.sliceToPrefixedFileW(dir.fd, file_name);
     const lpcTheFile = path_w.span(); // the file to be manipulated
     try stdout.print("typeOf(lpcTheFile): {s}\n", .{@typeName(@TypeOf(lpcTheFile))});
-    hFile = file_system.CreateFileW(
-        lpcTheFile, 
-        .{.FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1}, 
-        file_system.FILE_SHARE_READ, 
-        null, 
-        .CREATE_ALWAYS, 
-        file_system.FILE_ATTRIBUTE_NORMAL, 
-        null);
+    hFile = file_system.CreateFileW(lpcTheFile, .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, file_system.FILE_SHARE_READ, null, .CREATE_ALWAYS, file_system.FILE_ATTRIBUTE_NORMAL, null);
     defer _ = win32_zig.closeHandle(hFile); // close the file mapping object
 
     if (hFile == windows.INVALID_HANDLE_VALUE) {

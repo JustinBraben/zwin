@@ -37,20 +37,9 @@ pub fn run(self: *Window) !void {
         std.debug.panic("RegisterClass failed with {}", .{win32.GetLastError().fmt()});
     }
 
-    self.handle = win32.CreateWindowExA(
-        .{}, 
-        self.class.lpszClassName
-        , 
-        "Learn to Program Windows", 
-        win32.WS_OVERLAPPEDWINDOW, 
-        win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, 
-        null, 
-        null, 
-        self.instance, 
-        null
-    ) orelse return error.HandleNull;
+    self.handle = win32.CreateWindowExA(.{}, self.class.lpszClassName, "Learn to Program Windows", win32.WS_OVERLAPPEDWINDOW, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, self.instance, null) orelse return error.HandleNull;
 
-    _ = win32.ShowWindow(self.handle, .{ .SHOWNORMAL = 1});
+    _ = win32.ShowWindow(self.handle, .{ .SHOWNORMAL = 1 });
 
     var msg: win32.MSG = undefined;
     while (win32.GetMessageW(&msg, null, 0, 0) != 0) {
@@ -59,12 +48,7 @@ pub fn run(self: *Window) !void {
     }
 }
 
-fn WindowProc(
-    hWnd: win32.HWND, 
-    Msg: u32, 
-    wParam: win32.WPARAM, 
-    lParam: win32.LPARAM
-) callconv(WINAPI) win32.LRESULT {
+fn WindowProc(hWnd: win32.HWND, Msg: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
     switch (Msg) {
         win32.WM_DESTROY => {
             win32.PostQuitMessage(0);

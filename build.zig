@@ -7,6 +7,7 @@ const examples = [_][]const u8{
     "example-window-zwin",
     "example-window",
     "helloworld",
+    "mem-mapped",
     "view-within-a-file",
 };
 
