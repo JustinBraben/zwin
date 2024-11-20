@@ -10,6 +10,4 @@ pub fn main() !void {
     try example_mmap.mapView();
     const data_ptr = try example_mmap.getDataPointer();
     std.debug.print("Value at pointer: {}\n", .{data_ptr.*});
-    
-    // std.debug.print("file: {s}, mmap size: {d}\n", .{file_name, example_mmap.size()});
 }
