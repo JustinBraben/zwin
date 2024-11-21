@@ -7,15 +7,12 @@ pub fn main() !void {
     var hFile = try std.fs.cwd().openFile("fmtest.txt", .{ .mode = .read_only});
     defer hFile.close();
 
-    // var FileSize: windows.DWORD = undefined;
-    // windows.GetFileSizeEx(hFile.handle);
-
-    // const file_size = (try hFile.stat()).size;
     var file_size: i64 = @intCast(try windows.GetFileSizeEx(hFile.handle));
     if (file_size == 0) {
         std.debug.print("file_size is 0, exiting...\n", .{});
         return error.FileSizeZero;
     }
+    std.debug.print("file_size: {d}\n", .{file_size});
 
     const hModule = windows.kernel32.GetModuleHandleW(null) orelse {
         std.debug.print("hModule is null, exiting...\n", .{});
@@ -39,14 +36,18 @@ pub fn main() !void {
         windows.GetCurrentProcess(), 
         &address, 
         null, 
-        0, 
+        windows.SEC_FILE, 
         null, 
         &section_size, 
         .ViewUnmap, 
-        windows.MEM_COMMIT, 
+        0, 
         windows.PAGE_READWRITE);
+
+    if (map_view_of_section_status != .SUCCESS) {
+        // std.debug.print("NtMapViewOfSection has failed {any}, exiting...\n", .{map_view_of_section_status});
+        // return error.NtMapViewOfSectionFailed;
+    }
 
     _ = hModule;
     _ = section_status;
-    _ = map_view_of_section_status;
 }

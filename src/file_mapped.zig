@@ -31,10 +31,18 @@ buff_size: u32,
 pub const FileMappedConfig = struct {
     buff_size: u32 = 1024,
     file_map_start: u32 = 0,
+    creation_disposition: win32.FILE_CREATION_DISPOSITION = .CREATE_ALWAYS,
 };
 
-pub fn init(file: [*:0]const u8, config: FileMappedConfig) !FileMapped {
-    const handle = win32.CreateFileA(file, .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, win32.FILE_SHARE_READ, null, .CREATE_ALWAYS, .{ .FILE_ATTRIBUTE_NORMAL = 1 }, null);
+pub fn init(file: [*:0]const u8, config: FileMappedConfig) FileMapError!FileMapped {
+    const handle = win32.CreateFileA(
+        file, 
+        .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, 
+        win32.FILE_SHARE_READ, 
+        null, 
+        config.creation_disposition, 
+        .{ .FILE_ATTRIBUTE_NORMAL = 1 }, 
+        null);
 
     if (handle == std.os.windows.INVALID_HANDLE_VALUE) {
         return FileMapError.InvalidHandle;
@@ -114,16 +122,6 @@ pub fn getDataPointer(self: *FileMapped) !*u32 {
     return FileMapError.MapViewNull;
 }
 
-// // TODO:
-// // Alternative: make getDataPointer generic
-// pub fn getDataPointerGeneric(self: *FileMapped, comptime T: type) !*T {
-//     if (self.map_address) |addr| {
-//         const data_ptr: *T = @ptrCast(@alignCast(@as(*u8, @ptrFromInt(@intFromPtr(addr) + self.view_delta))));
-//         return data_ptr;
-//     }
-//     return FileMapError.MapViewNull;
-// }
-
 pub fn size(self: *FileMapped) u32 {
     return win32.GetFileSize(self.handle, null);
 }
@@ -160,6 +158,7 @@ test "FileMapped write and read data" {
     
     // Create test data
     const test_data = "Hello, Memory Mapped World!";
+    
     {
         const file = try std.fs.cwd().createFile(file_name, .{});
         defer file.close();
@@ -170,15 +169,42 @@ test "FileMapped write and read data" {
     var mapped_file = try FileMapped.init(file_name, .{
         .buff_size = test_data.len,
         .file_map_start = 0,
+        .creation_disposition = .OPEN_EXISTING
     });
     defer mapped_file.deinit();
     
     try mapped_file.createMapping();
     try mapped_file.mapView();
     
-    // // Read and verify data
-    // const data_ptr = try mapped_file.getDataPointer();
-    // // const data_ptr = try mapped_file.getDataPointerGeneric(u32);
-    // const mapped_data = @as([*]u8, @ptrCast(data_ptr))[0..test_data.len];
-    // try testing.expectEqualStrings(test_data, mapped_data);
+    // Read and verify data
+    const data_ptr = try mapped_file.getDataPointer();
+    const mapped_data = @as([*]u8, @ptrCast(data_ptr))[0..test_data.len];
+    try testing.expectEqualStrings(test_data, mapped_data);
+}
+
+test "FileMapped error handling" {
+    // Test invalid file
+    try testing.expectError(
+        FileMapError.InvalidHandle,
+        FileMapped.init("nonexistent_file.txt", .{
+            .creation_disposition = .OPEN_EXISTING,
+        })
+    );
+    
+    // Test mapping without creating file
+    const file_name = "test_errors.txt";
+    var mapped_file = try FileMapped.init(file_name, .{});
+    defer mapped_file.deinit();
+    
+    // Try to map view without creating mapping first
+    try testing.expectError(error.MapViewNull, mapped_file.mapView());
+}
+
+// Helper function to clean up test files
+fn cleanupTestFiles() void {
+    std.fs.cwd().deleteFile("test_init.txt") catch {};
+    std.fs.cwd().deleteFile("test_write_read.txt") catch {};
+    std.fs.cwd().deleteFile("test_size.txt") catch {};
+    std.fs.cwd().deleteFile("test_errors.txt") catch {};
+    std.fs.cwd().deleteFile("test_full_map.txt") catch {};
 }
