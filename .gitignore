@@ -2,7 +2,6 @@
 zig-out/
 
 # Text file Created from view-within-a-file.zig
-fmtest.txt
 nonexistent_file.txt
 test_full_map.txt
 test_init.txt
