@@ -28,12 +28,12 @@ pub fn init(class_name: [*:0]const u8, menu_name: [*:0]const u8) !Window {
 }
 
 pub fn deinit(self: *Window) void {
-    _ = &self;
+    if (self.handle) |window_handle| _ = win32.CloseWindow(window_handle);
 }
 
 pub fn run(self: *Window) !void {
-    // returning 0 means RegisterClassA failed
-    if (win32.RegisterClassA(&self.class) == 0) {
+    // returning FAIL (0) means RegisterClassA failed
+    if (win32.RegisterClassA(&self.class) == win32.FAIL) {
         std.debug.panic("RegisterClass failed with {}", .{win32.GetLastError().fmt()});
     }
 
