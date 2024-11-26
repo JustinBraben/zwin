@@ -8,14 +8,29 @@ pub const FileMapError = error{
     InvalidHandle,
     MapFileNull,
     MapViewNull,
+    ResizeFailed,
+    AccessDenied,
+};
+
+pub const FileAccess = enum {
+    read_only,
+    read_write,
+};
+
+pub const FileMappedConfig = struct {
+    buff_size: u32 = 1024,
+    file_map_start: u32 = 0,
+    creation_disposition: win32.FILE_CREATION_DISPOSITION = .CREATE_ALWAYS,
+    access_type: FileAccess = .read_write,
 };
 
 const FileMapped = @This();
 
 // File handles and mapping objects
-handle: win32.HANDLE,
-map_handle: ?win32.HANDLE,
-map_address: ?windows.LPVOID,
+handle: win32.HANDLE = windows.INVALID_HANDLE_VALUE,
+map_handle: ?win32.HANDLE = null,
+map_address: ?windows.LPVOID = null,
+access_type: FileAccess,
 
 // System information
 sys_info: win32.SYSTEM_INFO = undefined,
@@ -28,16 +43,15 @@ view_size: u32,
 view_delta: u32,
 buff_size: u32,
 
-pub const FileMappedConfig = struct {
-    buff_size: u32 = 1024,
-    file_map_start: u32 = 0,
-    creation_disposition: win32.FILE_CREATION_DISPOSITION = .CREATE_ALWAYS,
-};
-
 pub fn init(file: [*:0]const u8, config: FileMappedConfig) FileMapError!FileMapped {
+    const access_flags: win32.FILE_ACCESS_FLAGS = switch (config.access_type) {
+        .read_only => .{ .FILE_READ_DATA = 1 },
+        .read_write => .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 },
+    };
+
     const handle = win32.CreateFileA(
         file, 
-        .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, 
+        access_flags,
         win32.FILE_SHARE_READ, 
         null, 
         config.creation_disposition, 
@@ -61,8 +75,7 @@ pub fn init(file: [*:0]const u8, config: FileMappedConfig) FileMapError!FileMapp
 
     return .{
         .handle = handle,
-        .map_handle = null,
-        .map_address = null,
+        .access_type = config.access_type,
         .sys_info = sys_info,
         .sys_granularity = sys_granularity,
         .map_start = map_start,
@@ -76,20 +89,28 @@ pub fn init(file: [*:0]const u8, config: FileMappedConfig) FileMapError!FileMapp
 pub fn deinit(self: *FileMapped) void {
     if (self.map_address) |addr| {
         _ = win32.UnmapViewOfFile(addr);
+        self.map_address = null;
     }
     
     if (self.map_handle) |handle| {
         _ = win32.CloseHandle(handle);
+        self.map_handle = null;
     }
 
-    _ = win32.CloseHandle(self.handle);
+    if (self.handle != windows.INVALID_HANDLE_VALUE) {
+        _ = win32.CloseHandle(self.handle);
+        self.handle = windows.INVALID_HANDLE_VALUE;
+    }
 }
 
 pub fn createMapping(self: *FileMapped) !void {
     self.map_handle = win32.CreateFileMappingA(
         self.handle,
         null,
-        .{ .PAGE_READWRITE = 1 },
+        switch (self.access_type) {
+            .read_only => .{ .PAGE_READONLY = 1 },
+            .read_write => .{ .PAGE_READWRITE = 1 },
+        },
         0,
         self.map_size,
         null
@@ -103,7 +124,10 @@ pub fn createMapping(self: *FileMapped) !void {
 pub fn mapView(self: *FileMapped) !void {
     self.map_address = win32.MapViewOfFile(
         self.map_handle,
-        win32.FILE_MAP_ALL_ACCESS,
+        switch (self.access_type) {
+                .read_only => win32.FILE_MAP_READ,
+                .read_write => win32.FILE_MAP_ALL_ACCESS,
+        },
         0,
         self.map_start,
         self.view_size
