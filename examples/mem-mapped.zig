@@ -8,6 +8,7 @@ pub fn main() !void {
 
     try example_mmap.createMapping();
     try example_mmap.mapView();
-    const data_ptr = try example_mmap.getDataPointer();
+    var data_ptr = try example_mmap.getDataPointer();
     std.debug.print("Value at pointer: {}\n", .{data_ptr.*});
+    _ = &data_ptr;
 }
