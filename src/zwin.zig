@@ -1,6 +1,6 @@
 pub const Window = @import("window.zig");
 pub const FileMapped = @import("file_mapped.zig");
 
-test {
+comptime {
     _ = @import("file_mapped.zig");
 }

@@ -48,11 +48,11 @@ pub fn init(file: [*:0]const u8, config: FileMappedConfig) FileMapError!FileMapp
         .read_only => .{ .FILE_READ_DATA = 1 },
         .read_write => .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 },
     };
-
+    
     const handle = win32.CreateFileA(
         file, 
         access_flags,
-        win32.FILE_SHARE_READ, 
+        .{ .READ = 1, .WRITE = 1 }, 
         null, 
         config.creation_disposition, 
         .{ .FILE_ATTRIBUTE_NORMAL = 1 }, 
@@ -89,7 +89,7 @@ pub fn init(file: [*:0]const u8, config: FileMappedConfig) FileMapError!FileMapp
 pub fn deinit(self: *FileMapped) void {
     if (self.map_address) |addr| {
         _ = win32.UnmapViewOfFile(addr);
-        self.map_address = null;
+        // self.map_address = null;
     }
     
     if (self.map_handle) |handle| {
