@@ -4,6 +4,7 @@ const Build = std.Build;
 const Step = std.Build.Step;
 
 const examples = [_][]const u8{
+    "1brc",
     "example-window-zwin",
     "example-window",
     "helloworld",
@@ -47,6 +48,12 @@ pub fn build(b: *std.Build) void {
 
         const run_cmd = b.addRunArtifact(example);
         run_cmd.step.dependOn(compile_step);
+
+        // This allows the user to pass arguments to the application in the build
+        // command itself, like this: `zig build run -- arg1 arg2 etc`
+        if (b.args) |args| {
+            run_cmd.addArgs(args);
+        }
 
         const run_step = b.step("run-" ++ example_name, "Run " ++ example_name);
         run_step.dependOn(&run_cmd.step);
