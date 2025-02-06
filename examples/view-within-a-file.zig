@@ -1,12 +1,21 @@
 const std = @import("std");
 const windows = std.os.windows;
 const win32 = @import("win32").everything;
-const foundation = win32.foundation;
-const system = win32.system;
-const system_information = system.system_information;
-const memory = system.memory;
-const file_system = win32.storage.file_system;
-const win32_zig = win32.zig;
+// const foundation = win32.foundation;
+// const system = win32.system;
+// const system_information = system.system_information;
+// const memory = system.memory;
+// const file_system = win32.storage.file_system;
+// const win32_zig = win32.zig;
+
+fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
+    if (std.fmt.allocPrintZ(std.heap.page_allocator, fmt, args)) |msg| {
+        _ = win32.MessageBoxA(null, msg, "Fatal Error", .{});
+    } else |e| switch (e) {
+        error.OutOfMemory => _ = win32.MessageBoxA(null, "Out of memory", "Fatal Error", .{}),
+    }
+    std.process.exit(1);
+}
 
 pub const UNICODE = true;
 
@@ -56,8 +65,8 @@ pub fn main() !void {
     const path_w = try windows.sliceToPrefixedFileW(dir.fd, file_name);
     const lpcTheFile = path_w.span(); // the file to be manipulated
     try stdout.print("typeOf(lpcTheFile): {s}\n", .{@typeName(@TypeOf(lpcTheFile))});
-    hFile = file_system.CreateFileW(lpcTheFile, .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, file_system.FILE_SHARE_READ, null, .CREATE_ALWAYS, file_system.FILE_ATTRIBUTE_NORMAL, null);
-    defer _ = win32_zig.closeHandle(hFile); // close the file mapping object
+    hFile = win32.CreateFileW(lpcTheFile, .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, win32.FILE_SHARE_READ, null, .CREATE_ALWAYS, win32.FILE_ATTRIBUTE_NORMAL, null);
+    defer _ = win32.closeHandle(hFile); // close the file mapping object
 
     if (hFile == windows.INVALID_HANDLE_VALUE) {
         try stderr.print("hFile is NULL\n", .{});
@@ -66,7 +75,7 @@ pub fn main() !void {
     }
 
     // Get the system allocation granularity.
-    system_information.GetSystemInfo(&SysInfo);
+    win32.GetSystemInfo(&SysInfo);
     dwSysGran = SysInfo.dwAllocationGranularity;
 
     // Now calculate a few variables. Calculate the file offsets as
@@ -100,40 +109,41 @@ pub fn main() !void {
 
     var i: u32 = 0;
     while (i < dwSysGran) : (i += 1) {
-        _ = win32.storage.file_system.WriteFile(hFile, &i, @intCast(@sizeOf(@TypeOf(i))), &dBytesWritten, null);
+        _ = win32.WriteFile(hFile, &i, @intCast(@sizeOf(@TypeOf(i))), &dBytesWritten, null);
     }
 
     // Verify that the correct file size was written.
-    dwFileSize = win32.storage.file_system.GetFileSize(hFile, null);
+    dwFileSize = win32.GetFileSize(hFile, null);
     try stdout.print("hFile size: {d}\n", .{dwFileSize});
 
     // Create a file mapping object for the file
     // Note that it is a good idea to ensure the file size is not zero
-    hMapFile = memory.CreateFileMapping(hFile, // current file handle
+    hMapFile = win32.CreateFileMappingA(hFile, // current file handle
         null, // default security
         .{ .PAGE_READWRITE = 1 }, // read/write permission
         0, // size of mapping object, high
         dwFileMapSize, // size of mapping object, low
         null); // name of mapping object
     defer {
-        if (hMapFile) |map_file| _ = win32_zig.closeHandle(map_file); // close the file mapping object
+        if (hMapFile) |map_file| _ = win32.closeHandle(map_file); // close the file mapping object
     }
 
     if (hMapFile == null) {
-        try stderr.print("hMapFile is NULL: last error: {}\n", .{foundation.GetLastError()});
+        fatal("hMapFile is NULL: last error={}", .{win32.GetLastError()});
         return error.hMapFileIsNull;
     }
 
     // Map the view and test the results.
-    lpMapAddress = memory.MapViewOfFile(hMapFile, //handle to mapping object
-        memory.FILE_MAP_ALL_ACCESS, // read/write high-order 32
+    lpMapAddress = win32.MapViewOfFile(hMapFile, //handle to mapping object
+        win32.FILE_MAP_ALL_ACCESS, // read/write high-order 32
         0, dwFileMapStart, dwMapViewSize);
     defer {
-        if (lpMapAddress) |map_address| _ = memory.UnmapViewOfFile(map_address);
+        if (lpMapAddress) |map_address| _ = win32.UnmapViewOfFile(map_address);
     }
 
     if (lpMapAddress == null) {
-        try stderr.print("lpMapAddress is NULL: last error: {d}\n", .{foundation.GetLastError()});
+        fatal("lpMapAddress is NULL: last error={}", .{win32.GetLastError()});
+        // try stderr.print("lpMapAddress is NULL: last error: {d}\n", .{foundation.GetLastError()});
         return error.lpMapAddressFileIsNull;
     }
 
@@ -148,7 +158,7 @@ pub fn main() !void {
     try bw.flush(); // don't forget to flush!
 }
 
-const SYSTEM_INFO = system_information.SYSTEM_INFO;
+const SYSTEM_INFO = win32.SYSTEM_INFO;
 const HANDLE = windows.HANDLE;
 const BOOL = windows.DWORD;
 const DWORD = windows.DWORD;

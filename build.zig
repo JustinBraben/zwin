@@ -4,13 +4,12 @@ const Build = std.Build;
 const Step = std.Build.Step;
 
 const examples = [_][]const u8{
-    // "1brc",
     "example-window-zwin",
     "example-window",
     "helloworld",
-    // "mem-mapped-ntd",
-    // "mem-mapped",
-    // "view-within-a-file",
+    "mem-mapped-ntd",
+    "mem-mapped",
+    "view-within-a-file",
 };
 
 pub fn build(b: *std.Build) void {
