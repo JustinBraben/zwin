@@ -1,4 +1,4 @@
-const win32 = @import("zigwin32").everything;
+const win32 = @import("win32").everything;
 const std = @import("std");
 
 pub const UNICODE = true;

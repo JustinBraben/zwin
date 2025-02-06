@@ -1,11 +1,11 @@
 .{
     .name = "zwin",
     .version = "0.1.0",
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.14.0-dev",
     .dependencies = .{
         .zigwin32 = .{
-            .url = "git+https://github.com/marlersoft/zigwin32#2b449050de72d76e9da5b3de8b4b0873dcb733c5",
-            .hash = "12205354832d93fb0b7f5f3a55965afd52f9c631e5f57d26f35f0ef18c8ceafa9260",
+            .url = "git+https://github.com/marlersoft/zigwin32#e8739b32a33ce48a3286aba31918b26a9dfc6ef0",
+            .hash = "1220219ca4acfa5804ca39945f92554e93507b077c03605b7a4c1c0401f0c7121339",
         },
     },
     .paths = .{

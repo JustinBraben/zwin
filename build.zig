@@ -4,13 +4,13 @@ const Build = std.Build;
 const Step = std.Build.Step;
 
 const examples = [_][]const u8{
-    "1brc",
+    // "1brc",
     "example-window-zwin",
     "example-window",
     "helloworld",
-    "mem-mapped-ntd",
-    "mem-mapped",
-    "view-within-a-file",
+    // "mem-mapped-ntd",
+    // "mem-mapped",
+    // "view-within-a-file",
 };
 
 pub fn build(b: *std.Build) void {
@@ -25,9 +25,9 @@ pub fn build(b: *std.Build) void {
     });
 
     const zigwin32_dep = b.dependency("zigwin32", .{});
-    const zigwin32_mod = zigwin32_dep.module("zigwin32");
+    const zigwin32_mod = zigwin32_dep.module("win32");
 
-    zwin_mod.addImport("zigwin32", zigwin32_mod);
+    zwin_mod.addImport("win32", zigwin32_mod);
 
     const examples_step = b.step("examples", "Build examples");
     inline for (examples) |example_name| {
@@ -39,7 +39,7 @@ pub fn build(b: *std.Build) void {
         });
 
         // Add imports and/or link libraries if necessary
-        example.root_module.addImport("zigwin32", zigwin32_mod);
+        example.root_module.addImport("win32", zigwin32_mod);
         example.root_module.addImport("zwin", zwin_mod);
 
         const compile_step = b.step(example_name, "Build " ++ example_name);
@@ -65,7 +65,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .target = target,
     });
-    tests.root_module.addImport("zigwin32", zigwin32_mod);
+    tests.root_module.addImport("win32", zigwin32_mod);
     tests.root_module.addImport("zwin", zwin_mod);
     const run_tests = b.addRunArtifact(tests);
     test_step.dependOn(&run_tests.step);

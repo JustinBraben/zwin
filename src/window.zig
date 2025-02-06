@@ -1,8 +1,17 @@
 const std = @import("std");
 const WINAPI = std.os.windows.WINAPI;
-const win32 = @import("zigwin32").everything;
+const win32 = @import("win32").everything;
 
 const Window = @This();
+
+fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
+    if (std.fmt.allocPrintZ(std.heap.page_allocator, fmt, args)) |msg| {
+        _ = win32.MessageBoxA(null, msg, "Fatal Error", .{});
+    } else |e| switch (e) {
+        error.OutOfMemory => _ = win32.MessageBoxA(null, "Out of memory", "Fatal Error", .{}),
+    }
+    std.process.exit(1);
+}
 
 instance: win32.HINSTANCE,
 class: win32.WNDCLASSA,
@@ -34,10 +43,10 @@ pub fn deinit(self: *Window) void {
 pub fn run(self: *Window) !void {
     // returning FAIL (0) means RegisterClassA failed
     if (win32.RegisterClassA(&self.class) == win32.FAIL) {
-        std.debug.panic("RegisterClass failed with {}", .{win32.GetLastError().fmt()});
+        fatal("RegisterClass failed, error={}", .{win32.GetLastError()});
     }
 
-    self.handle = win32.CreateWindowExA(.{}, self.class.lpszClassName, "Learn to Program Windows", win32.WS_OVERLAPPEDWINDOW, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, self.instance, null) orelse return error.HandleNull;
+    self.handle = win32.CreateWindowExA(.{}, self.class.lpszClassName, "Learn to Program Windows", win32.WS_OVERLAPPEDWINDOW, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, self.instance, null) orelse fatal("CreateWindow failed, error={}", .{win32.GetLastError()});
 
     _ = win32.ShowWindow(self.handle, .{ .SHOWNORMAL = 1 });
 

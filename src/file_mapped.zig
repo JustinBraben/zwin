@@ -2,7 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const windows = std.os.windows;
 const WINAPI = std.os.windows.WINAPI;
-const win32 = @import("zigwin32").everything;
+const win32 = @import("win32").everything;
 
 pub const FileMapError = error{
     InvalidHandle,

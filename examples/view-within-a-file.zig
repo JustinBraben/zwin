@@ -1,6 +1,6 @@
 const std = @import("std");
 const windows = std.os.windows;
-const win32 = @import("zigwin32");
+const win32 = @import("win32").everything;
 const foundation = win32.foundation;
 const system = win32.system;
 const system_information = system.system_information;
