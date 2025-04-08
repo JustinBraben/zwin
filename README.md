@@ -5,7 +5,7 @@ Educational library for Win32 API, using zig.
 
 ## Installation
 
-To install zwin, you'll need to have Zig `0.13.0` on your system. Then, follow these steps:
+To install zwin, you'll need to have Zig `0.14.0` on your system. Then, follow these steps:
 
 1. Clone the repository:
    ```
