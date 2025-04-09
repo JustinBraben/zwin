@@ -25,7 +25,23 @@ fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
 hwnd: ?win32.HWND = null,
 instance: win32.HINSTANCE = undefined,
 class: win32.WNDCLASSA = undefined,
+title: [:0]const u8 = undefined,
+message_callback: ?MessageCallback = null,
 allocator: std.mem.Allocator,
+
+/// Callback for handling window messages
+pub const MessageCallback = *const fn (window: *Window, msg: u32, wparam: WPARAM, lparam: LPARAM) ?LRESULT;
+
+/// Options for creating a window
+pub const CreateOptions = struct {
+    title: [:0]const u8 = "ZWin Window",
+    class_name: [:0]const u8 = "ZWin_Window_Class",
+    width: i32 = 800,
+    height: i32 = 600,
+    style: win32.WINDOW_STYLE = win32.WS_OVERLAPPEDWINDOW,
+    ex_style: win32.WINDOW_EX_STYLE = win32.WS_EX_APPWINDOW,
+    message_callback: ?MessageCallback = null,
+};
 
 pub fn init(allocator: std.mem.Allocator, options: CreateOptions) !*Window {
     const window = try allocator.create(Window);
@@ -34,11 +50,13 @@ pub fn init(allocator: std.mem.Allocator, options: CreateOptions) !*Window {
     window.* = .{
         .instance = win32.GetModuleHandleA(null) orelse return error.InstanceNull,
         .hwnd = null,
+        .title = options.title,
+        .message_callback = options.message_callback,
         .allocator = allocator,
     };
 
     try window.registerClass(options);
-    try window.createWindow();
+    try window.createWindow(options);
     
     return window;
 }
@@ -71,8 +89,39 @@ fn registerClass(self: *Window, options: CreateOptions) !void {
 }
 
 /// Create the window
-fn createWindow(self: *Window) !void {
-    self.hwnd = win32.CreateWindowExA(.{}, self.class.lpszClassName, "Learn to Program Windows", win32.WS_OVERLAPPEDWINDOW, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, self.instance, null) orelse fatal("CreateWindow failed, error={}", .{win32.GetLastError()});
+fn createWindow(self: *Window, options: CreateOptions) !void {
+    // Calculate the required window size based on desired client area
+    var rect = RECT{
+        .left = 0,
+        .top = 0,
+        .right = options.width,
+        .bottom = options.height,
+    };
+
+    _ = win32.AdjustWindowRectEx(
+        &rect,
+        options.style,
+        0,
+        options.ex_style
+    );
+
+    const adjusted_width = rect.right - rect.left;
+    const adjusted_height = rect.bottom - rect.top;
+
+    self.hwnd = win32.CreateWindowExA(
+        .{}, 
+        self.class.lpszClassName, 
+        options.title, 
+        options.style, 
+        win32.CW_USEDEFAULT, 
+        win32.CW_USEDEFAULT, 
+        adjusted_width, 
+        adjusted_height, 
+        null, 
+        null, 
+        self.instance, 
+        self
+    ) orelse fatal("CreateWindow failed, error={}", .{win32.GetLastError()});
 }
 
 /// Show the window
@@ -99,16 +148,6 @@ pub fn setTitle(self: *Window, title: [:0]const u8) void {
     self.title = title;
 }
 
-pub fn run(self: *Window) !void {
-    _ = win32.ShowWindow(self.hwnd, .{ .SHOWNORMAL = 1 });
-
-    var msg: win32.MSG = undefined;
-    while (win32.GetMessageW(&msg, null, 0, 0) != 0) {
-        _ = win32.TranslateMessage(&msg);
-        _ = win32.DispatchMessageW(&msg);
-    }
-}
-
 /// Main window procedure
 fn WindowProc(hWnd: win32.HWND, Msg: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
     var pThis: ?*Window = null;
@@ -124,8 +163,15 @@ fn WindowProc(hWnd: win32.HWND, Msg: u32, wParam: win32.WPARAM, lParam: win32.LP
         pThis = @ptrFromInt(@as(usize, @bitCast(win32.getWindowLongPtrA(hWnd, @intFromEnum(win32.GWL_USERDATA)))));
     }
 
-    // TODO: Call the message callback if it exists
-    
+    // Call the message callback if it exists
+    if (pThis) |window| {
+        if (window.message_callback) |callback| {
+            if (callback(window, Msg, wParam, lParam)) |result| {
+                return result;
+            }
+        }
+    }
+
     switch (Msg) {
         win32.WM_DESTROY => {
             win32.PostQuitMessage(0);
@@ -152,17 +198,3 @@ pub fn runMessageLoop() void {
         _ = win32.DispatchMessageA(&msg);
     }
 }
-
-/// Callback for handling window messages
-pub const MessageCallback = fn (window: *Window, msg: u32, wparam: WPARAM, lparam: LPARAM) ?LRESULT;
-
-/// Options for creating a window
-pub const CreateOptions = struct {
-    title: [:0]const u8 = "ZWin Window",
-    class_name: [:0]const u8 = "ZWin_Window_Class",
-    width: i32 = 800,
-    height: i32 = 600,
-    style: win32.WINDOW_STYLE = win32.WS_OVERLAPPEDWINDOW,
-    ex_style: u32 = 0,
-    message_callback: ?MessageCallback = null,
-};
