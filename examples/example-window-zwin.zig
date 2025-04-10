@@ -11,8 +11,8 @@ pub fn main() !void {
     var example_window = try zwin.Window.init(allocator, .{
         .title = "ZWin Test Application",
         .class_name = "ZWin_Test_Window",
-        .width = 800,
-        .height = 600,
+        .width = 600,
+        .height = 480,
         .message_callback = handleMessage,
     });
     defer example_window.deinit();
