@@ -4,7 +4,7 @@ const win32 = @import("win32").everything;
 
 pub fn main() !void {
     // Initialize memory allocator
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
