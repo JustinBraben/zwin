@@ -4,6 +4,7 @@ const Build = std.Build;
 const Step = std.Build.Step;
 
 const examples = [_][]const u8{
+    "example-dxwindow",
     "example-window-zwin",
     "example-window",
     "helloworld",
