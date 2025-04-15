@@ -1,3 +1,4 @@
+//! window.zig
 const std = @import("std");
 const WINAPI = std.os.windows.WINAPI;
 const win32 = @import("win32").everything;

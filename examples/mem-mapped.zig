@@ -2,15 +2,31 @@ const std = @import("std");
 const zwin = @import("zwin");
 
 pub fn main() !void {
+    // Initialize memory allocator
+    var gpa = std.heap.DebugAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
     const file_name = "test_write_read.txt";
-    var example_mmap = try zwin.FileMapped.init(file_name, .{ 
-        .buff_size = 27,
+    const test_data = "Hello, Memory Mapped World!";
+    {
+        const file = try std.fs.cwd().createFile(file_name, .{});
+        defer file.close();
+        try file.writeAll(test_data);
+    }
+
+    // Map the file
+    var mapped_file = try zwin.FileMapped.init(allocator, file_name, .{
+        .buff_size = @intCast(test_data.len),
+        .file_map_start = 0,
         .creation_disposition = .OPEN_EXISTING
     });
-    defer example_mmap.deinit();
+    defer mapped_file.deinit();
 
-    try example_mmap.createMapping();
-    try example_mmap.mapView();
-    // const data_ptr = try example_mmap.getDataPointer();
-    // std.debug.print("Value at pointer: {}\n", .{data_ptr.*});
+    // Read and verify data
+    const mapped_data = try mapped_file.getData();
+    std.debug.print("{s}\n", .{mapped_data});
+
+    const typed_data = try mapped_file.getDataAs(u8);
+    std.debug.print("{s}\n", .{typed_data});
 }
