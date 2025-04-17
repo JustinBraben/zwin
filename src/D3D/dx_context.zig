@@ -23,12 +23,12 @@ dxgi_factory: ComPointer(win32.IDXGIFactory7),
 device: ComPointer(win32.ID3D12Device),
 cmd_queue: ComPointer(win32.ID3D12CommandQueue),
 
-// cmd_allocator: ComPointer(win32.ID3D12CommandAllocator),
-// cmd_list: ComPointer(win32.ID3D12GraphicsCommandList6),
+cmd_allocator: ComPointer(win32.ID3D12CommandAllocator),
+cmd_list: ComPointer(win32.ID3D12GraphicsCommandList),
 
-// fence: ComPointer(win32.ID3D12Fence1),
-// fence_value: u64 = 0,
-// fence_event: ?win32.HANDLE = null,
+fence: ComPointer(win32.ID3D12Fence1),
+fence_value: u64 = 0,
+fence_event: ?win32.HANDLE = null,
 
 pub fn init() !DXContext {
     // First create a DXGI factory
@@ -66,29 +66,70 @@ pub fn init() !DXContext {
         }
     }
 
-    // var fence = ComPointer(win32.ID3D12Fence1).init();
-    // const fence_value: u64 = 0;
-    // if (device.ptr) |ptr| {
-    //     if (win32.FAILED(ptr.vtable.CreateFence(
-    //         device.ptr.?,
-    //         fence_value,
-    //         win32.D3D12_FENCE_FLAG_NONE, 
-    //         win32.IID_ID3D12Fence1,
-    //         @as(**anyopaque, @ptrCast(cmd_queue.ptrPtr())
-    //     )))) {
-    //         return error.CreateCommandQueueFailed;
-    //     }
-    // }
+    var fence = ComPointer(win32.ID3D12Fence1).init();
+    const fence_value: u64 = 0;
+    if (device.ptr) |ptr| {
+        if (win32.FAILED(ptr.vtable.CreateFence(
+            device.ptr.?,
+            fence_value,
+            win32.D3D12_FENCE_FLAG_NONE, 
+            win32.IID_ID3D12Fence1,
+            @as(**anyopaque, @ptrCast(fence.ptrPtr())
+        )))) {
+            return error.CreateFenceFailed;
+        }
+    }
 
+    var fence_event: ?win32.HANDLE = null;
+    fence_event = win32.CreateEventA(null, 0, 0, null);
+
+    var cmd_allocator = ComPointer(win32.ID3D12CommandAllocator).init();
+    if (device.ptr) |ptr| {
+        if (win32.FAILED(ptr.vtable.CreateCommandAllocator(
+            device.ptr.?,
+            win32.D3D12_COMMAND_LIST_TYPE_DIRECT, 
+            win32.IID_ID3D12CommandAllocator,
+            @as(**anyopaque, @ptrCast(cmd_allocator.ptrPtr())
+        )))) {
+            return error.CreateCommandAllocatorFailed;
+        }
+    }
+
+    var cmd_list = ComPointer(win32.ID3D12GraphicsCommandList).init();
+    if (device.ptr) |ptr| {
+        if (win32.FAILED(ptr.vtable.CreateCommandList(
+            device.ptr.?,
+            0,
+            win32.D3D12_COMMAND_LIST_TYPE_DIRECT,
+            cmd_allocator.ptr,
+            null,
+            win32.IID_ID3D12GraphicsCommandList,
+            @as(**anyopaque, @ptrCast(cmd_list.ptrPtr())
+        )))) {
+            return error.CreateCommandListFailed;
+        }
+    }
 
     return .{
         .dxgi_factory = factory,
         .device = device,
         .cmd_queue = cmd_queue,
+        .cmd_allocator = cmd_allocator,
+        .cmd_list = cmd_list,
+        .fence = fence,
+        .fence_value = fence_value,
+        .fence_event = fence_event,
     };
 }
 
 pub fn shutdown(self: *DXContext) void {
+    _ = self.cmd_list.release();
+    _ = self.cmd_allocator.release();
+    if (self.fence_event) |fence_event| {
+        _ = win32.CloseHandle(fence_event);
+    }
+
+    _ = self.fence.release();
     _ = self.cmd_queue.release();
     _ = self.device.release();
 
