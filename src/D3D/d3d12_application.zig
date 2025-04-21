@@ -1,6 +1,7 @@
-//! window.zig
+//! d3d12_application.zig
 const std = @import("std");
-const WINAPI = std.os.windows.WINAPI;
+const windows = std.os.windows;
+const WINAPI = windows.WINAPI;
 const win32 = @import("win32").everything;
 const HWND = win32.HWND;
 const HINSTANCE = win32.HINSTANCE;
@@ -11,8 +12,12 @@ const RECT = win32.RECT;
 const L = win32.L;
 const POINT = win32.POINT;
 const MSG = win32.MSG;
+const Window = @import("../window.zig");
+const ComPointer = @import("com_pointer.zig").ComPointer;
 
-const Window = @This();
+const FrameCount: usize = 2;
+
+const D3D12Application = @This();
 
 fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
     if (std.fmt.allocPrintZ(std.heap.page_allocator, fmt, args)) |msg| {
@@ -23,59 +28,68 @@ fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
     std.process.exit(1);
 }
 
-hwnd: ?win32.HWND = null,
-instance: ?win32.HINSTANCE = undefined,
 class: win32.WNDCLASSA = undefined,
-title: [:0]const u8 = undefined,
+hwnd: ?win32.HWND = null,
+instance: win32.HINSTANCE = undefined,
+should_close: bool = false,
+
+should_resize: bool = false,
+
+is_fullscreen: bool = false,
+
+swap_chain: ComPointer(win32.IDXGISwapChain3) = undefined,
+buffers: [FrameCount]ComPointer(win32.ID3D12Resource2) = undefined,
+current_buffer_index: usize = 0,
+
 message_callback: ?MessageCallback = null,
 allocator: std.mem.Allocator,
 
 /// Callback for handling window messages
-pub const MessageCallback = *const fn (window: *Window, msg: u32, wparam: WPARAM, lparam: LPARAM) ?LRESULT;
+pub const MessageCallback = *const fn (window: *D3D12Application, msg: u32, wparam: WPARAM, lparam: LPARAM) ?LRESULT;
 
 /// Options for creating a window
 pub const CreateOptions = struct {
     title: [:0]const u8 = "ZWin Window",
     class_name: [:0]const u8 = "ZWin_Window_Class",
-    width: i32 = 800,
-    height: i32 = 600,
+    width: i32 = 1920,
+    height: i32 = 1080,
     style: win32.WINDOW_STYLE = win32.WS_OVERLAPPEDWINDOW,
     ex_style: win32.WINDOW_EX_STYLE = win32.WS_EX_APPWINDOW,
     message_callback: ?MessageCallback = null,
 };
 
-pub fn init(allocator: std.mem.Allocator, options: CreateOptions) !*Window {
-    const window = try allocator.create(Window);
+pub fn init(allocator: std.mem.Allocator, options: CreateOptions) !*D3D12Application {
+    const window = try allocator.create(D3D12Application);
     errdefer allocator.destroy(window);
 
     window.* = .{
         .instance = win32.GetModuleHandleA(null) orelse return error.InstanceNull,
         .hwnd = null,
-        .title = options.title,
         .message_callback = options.message_callback,
         .allocator = allocator,
     };
 
     try window.registerClass(options);
     try window.createWindow(options);
+    try window.createSwapChain(options);
     
     return window;
 }
 
-pub fn deinit(self: *Window) void {
+pub fn deinit(self: *D3D12Application) void {
     if (self.hwnd) |window_handle| _ = win32.DestroyWindow(window_handle);
     _ = win32.UnregisterClassA(self.class.lpszClassName, self.instance);
     self.allocator.destroy(self);
 }
 
 /// Register the window class
-fn registerClass(self: *Window, options: CreateOptions) !void {
+fn registerClass(self: *D3D12Application, options: CreateOptions) !void {
     self.class = .{
         .style = .{},
         .lpfnWndProc = WindowProc,
         .cbClsExtra = 0,
         .cbWndExtra = 0,
-        .hInstance = self.instance,
+        .hInstance = win32.GetModuleHandleA(null) orelse return error.InstanceNull,
         .hIcon = null,
         .hCursor = null,
         .hbrBackground = null,
@@ -90,7 +104,7 @@ fn registerClass(self: *Window, options: CreateOptions) !void {
 }
 
 /// Create the window
-fn createWindow(self: *Window, options: CreateOptions) !void {
+fn createWindow(self: *D3D12Application, options: CreateOptions) !void {
     // Calculate the required window size based on desired client area
     var rect = RECT{
         .left = 0,
@@ -125,33 +139,63 @@ fn createWindow(self: *Window, options: CreateOptions) !void {
     ) orelse fatal("CreateWindow failed, error={}", .{win32.GetLastError()});
 }
 
+fn createSwapChain(self: *D3D12Application, options: CreateOptions) !void {
+    _ = self;
+    // Describe swap chain
+    var swd: win32.DXGI_SWAP_CHAIN_DESC1 = undefined;
+    var sfd: win32.DXGI_SWAP_CHAIN_FULLSCREEN_DESC = undefined;
+
+    swd = .{
+        .Width = @intCast(options.width),
+        .Height = @intCast(options.height),
+        .Format = win32.DXGI_FORMAT_R8G8B8A8_UNORM,
+        .Stereo = win32.FALSE,
+        .SampleDesc = .{ .Count = 1, .Quality = 0 },
+        .BufferUsage = win32.DXGI_USAGE_BACK_BUFFER | win32.DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        .BufferCount = FrameCount,
+        .Scaling = win32.DXGI_SCALING_STRETCH,
+        .SwapEffect = win32.DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        .AlphaMode = win32.DXGI_ALPHA_MODE_IGNORE,
+        .Flags = @intFromEnum(win32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH) | @intFromEnum(win32.DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING),
+    };
+
+    sfd = .{
+        .RefreshRate = .{ .Denominator = 0, .Numerator = 1 },
+        .ScanlineOrdering = .UNSPECIFIED,
+        .Scaling = .UNSPECIFIED,
+        .Windowed = win32.FALSE 
+    };
+
+
+}
+
 /// Show the window
-pub fn show(self: *Window) void {
+pub fn show(self: *D3D12Application) void {
     _ = win32.ShowWindow(self.hwnd, win32.SW_SHOW);
     _ = win32.UpdateWindow(self.hwnd);
 }
 
 /// Hide the window
-pub fn hide(self: *Window) void {
+pub fn hide(self: *D3D12Application) void {
     _ = win32.ShowWindow(self.hwnd, win32.SW_HIDE);
 }
 
 /// Get client area dimensions
-pub fn getClientSize(self: *Window) RECT {
+pub fn getClientSize(self: *D3D12Application) RECT {
     var rect: RECT = undefined;
     _ = win32.GetClientRect(self.hwnd, &rect);
     return rect;
 }
 
 /// Set window title
-pub fn setTitle(self: *Window, title: [:0]const u8) void {
+pub fn setTitle(self: *D3D12Application, title: [:0]const u8) void {
     _ = win32.SetWindowTextA(self.hwnd, title);
     self.title = title;
 }
 
 /// Main window procedure
 fn WindowProc(hWnd: win32.HWND, Msg: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
-    var pThis: ?*Window = null;
+    var pThis: ?*D3D12Application = null;
     if (Msg == win32.WM_NCCREATE) {
         const pCreate: *win32.CREATESTRUCTA = @ptrFromInt(@as(usize, @bitCast(lParam)));
         pThis = @ptrCast(@alignCast(pCreate.lpCreateParams));
