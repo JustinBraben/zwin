@@ -13,8 +13,8 @@ pub fn main() !void {
     defer ctx.shutdown();
 
     var example_window = try zwin.DXWindow.init(allocator, .{
-        .title = "ZWin Test Application",
-        .class_name = "ZWin_Test_Window",
+        .title = "ZWin Test D3D12 Application",
+        .class_name = "ZWin_Test_D3D12_Window",
         .message_callback = handleMessage,
     });
     defer example_window.deinit();
