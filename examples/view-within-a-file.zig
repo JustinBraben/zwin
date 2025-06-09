@@ -38,6 +38,8 @@ pub fn main() !void {
     var hMapFile: ?HANDLE = undefined;
     // the file handle
     var hFile: HANDLE = undefined;
+    // a result holder
+    var bFlag: BOOL = undefined;
     // number of bytes written
     var dBytesWritten: DWORD = undefined;
     // temporary storage for file sizes
@@ -57,16 +59,20 @@ pub fn main() !void {
 
     var pData: *u8 = undefined; // pointer to the data
 
-    var iData: *u32 = undefined; // on success contains the first int of data
-    var iViewDelta: DWORD = undefined; // the offset into the view where the data shows up
+    // on success contains the first int of data
+    var iData: *u32 = undefined;
+    // the offset into the view where the data shows up
+    var iViewDelta: DWORD = undefined;
 
     const file_name = "fmtest.txt";
     const dir = std.fs.cwd();
     const path_w = try windows.sliceToPrefixedFileW(dir.fd, file_name);
-    const lpcTheFile = path_w.span(); // the file to be manipulated
+    // the file to be manipulated
+    const lpcTheFile = path_w.span();
     try stdout.print("typeOf(lpcTheFile): {s}\n", .{@typeName(@TypeOf(lpcTheFile))});
     hFile = win32.CreateFileW(lpcTheFile, .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, win32.FILE_SHARE_READ, null, .CREATE_ALWAYS, win32.FILE_ATTRIBUTE_NORMAL, null);
-    defer _ = win32.closeHandle(hFile); // close the file mapping object
+    // close the file itself
+    defer bFlag = win32.CloseHandle(hFile);
 
     if (hFile == windows.INVALID_HANDLE_VALUE) {
         try stderr.print("hFile is NULL\n", .{});
@@ -159,8 +165,8 @@ pub fn main() !void {
 }
 
 const SYSTEM_INFO = win32.SYSTEM_INFO;
+const BOOL = win32.BOOL;
 const HANDLE = windows.HANDLE;
-const BOOL = windows.DWORD;
 const DWORD = windows.DWORD;
 const INT = windows.INT;
 const LPVOID = windows.LPVOID;

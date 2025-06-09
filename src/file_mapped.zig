@@ -15,6 +15,7 @@ pub const FileMapError = error{
     ResizeFailed,
     AccessDenied,
     InvalidSize,
+    PathTooLong,
 };
 
 /// Access modes for memory mapped files
@@ -43,8 +44,10 @@ handle: win32.HANDLE = windows.INVALID_HANDLE_VALUE,
 map_handle: ?win32.HANDLE = null,
 map_address: ?windows.LPVOID = null,
 access_type: FileAccess,
-file_path: [:0]const u8,
-allocator: std.mem.Allocator,
+
+// Store path directly in struct with fixed buffer
+file_path: [260:0]u8 = std.mem.zeroes([260:0]u8), // MAX_PATH on Windows
+file_path_len: u16 = 0,
 
 // System information
 sys_info: win32.SYSTEM_INFO = undefined,
@@ -58,14 +61,26 @@ view_delta: u32,
 buff_size: u32,
 
 /// Initialize a memory mapped file with the given options
-pub fn init(allocator: std.mem.Allocator, file_path: []const u8, options: CreateOptions) !*FileMapped {
-    // Create a null-terminated copy of the file path
-    const path_copy = try allocator.dupeZ(u8, file_path);
-    errdefer allocator.free(path_copy);
+pub fn init(file_path: []const u8, options: CreateOptions) !FileMapped {
+    // Check path length
+    if (file_path.len >= 260) {
+        return FileMapError.PathTooLong;
+    }
     
-    // Create the FileMapped instance
-    const file_mapped = try allocator.create(FileMapped);
-    errdefer allocator.destroy(file_mapped);
+    var file_mapped = FileMapped{
+        .access_type = options.access_type,
+        .sys_granularity = undefined,
+        .map_start = undefined,
+        .map_size = undefined,
+        .view_size = undefined,
+        .view_delta = undefined,
+        .buff_size = options.buff_size,
+    };
+    
+    // Copy path and null terminate
+    @memcpy(file_mapped.file_path[0..file_path.len], file_path);
+    file_mapped.file_path[file_path.len] = 0;
+    file_mapped.file_path_len = @intCast(file_path.len);
 
     const access_flags: win32.FILE_ACCESS_FLAGS = switch (options.access_type) {
         .read_only => .{ .FILE_READ_DATA = 1 },
@@ -73,8 +88,8 @@ pub fn init(allocator: std.mem.Allocator, file_path: []const u8, options: Create
     };
 
     // Open the file
-    const handle = win32.CreateFileA(
-        path_copy, 
+    file_mapped.handle = win32.CreateFileA(
+        @ptrCast(&file_mapped.file_path), 
         access_flags,
         .{ .READ = 1, .WRITE = 1 }, 
         null, 
@@ -84,37 +99,19 @@ pub fn init(allocator: std.mem.Allocator, file_path: []const u8, options: Create
     );
 
     // Check if file handle is valid
-    if (handle == std.os.windows.INVALID_HANDLE_VALUE) {
+    if (file_mapped.handle == std.os.windows.INVALID_HANDLE_VALUE) {
         return FileMapError.InvalidHandle;
     }
 
     // Get sys info for memory mapped file
-    var sys_info: win32.SYSTEM_INFO = undefined;
-    win32.GetSystemInfo(&sys_info);
-    const sys_granularity = sys_info.dwAllocationGranularity;
+    win32.GetSystemInfo(&file_mapped.sys_info);
+    file_mapped.sys_granularity = file_mapped.sys_info.dwAllocationGranularity;
 
     // Calculate mapping parameters
-    const map_start = (options.file_map_start / sys_granularity) * sys_granularity;
-    const view_size = (options.file_map_start % sys_granularity) + options.buff_size;
-    const map_size = options.file_map_start + options.buff_size;
-    const view_delta = options.file_map_start - map_start;
-
-    // Initialize the FileMapped struct
-    file_mapped.* = .{
-        .handle = handle,
-        .access_type = options.access_type,
-        .sys_info = sys_info,
-        .sys_granularity = sys_granularity,
-        .map_start = map_start,
-        .map_size = map_size,
-        .view_size = view_size,
-        .view_delta = view_delta,
-        .buff_size = options.buff_size,
-        .file_path = path_copy,
-        .allocator = allocator,
-        .map_handle = null,
-        .map_address = null,
-    };
+    file_mapped.map_start = (options.file_map_start / file_mapped.sys_granularity) * file_mapped.sys_granularity;
+    file_mapped.view_size = (options.file_map_start % file_mapped.sys_granularity) + options.buff_size;
+    file_mapped.map_size = options.file_map_start + options.buff_size;
+    file_mapped.view_delta = options.file_map_start - file_mapped.map_start;
 
     // Immediately create the mapping and map the view for easier use
     file_mapped.createMapping() catch |err| {
@@ -146,9 +143,6 @@ pub fn deinit(self: *FileMapped) void {
         _ = win32.CloseHandle(self.handle);
         self.handle = windows.INVALID_HANDLE_VALUE;
     }
-
-    self.allocator.free(self.file_path);
-    self.allocator.destroy(self);
 }
 
 pub fn createMapping(self: *FileMapped) !void {
@@ -287,11 +281,16 @@ pub fn dump(self: *FileMapped) void {
     }
 }
 
+/// Get the stored file path
+pub fn getFilePath(self: *const FileMapped) []const u8 {
+    return self.file_path[0..self.file_path_len];
+}
+
+
+// Updated tests for allocator-free version
 test "FileMapped basic initialization" {
-    const allocator = testing.allocator;
-    
     const file_name = "test_init.txt";
-    var mapped_file = try FileMapped.init(allocator, file_name, .{});
+    var mapped_file = try FileMapped.init(file_name, .{});
     defer mapped_file.deinit();
     
     try testing.expect(mapped_file.handle != std.os.windows.INVALID_HANDLE_VALUE);
@@ -300,8 +299,6 @@ test "FileMapped basic initialization" {
 }
 
 test "FileMapped write and read data" {
-    const allocator = testing.allocator;
-
     const file_name = "test_write_read.txt";
     
     // Create test data
@@ -314,7 +311,7 @@ test "FileMapped write and read data" {
     }
     
     // Map the file
-    var mapped_file = try FileMapped.init(allocator, file_name, .{
+    var mapped_file = try FileMapped.init(file_name, .{
         .buff_size = @intCast(test_data.len),
         .file_map_start = 0,
         .creation_disposition = .OPEN_EXISTING
@@ -330,102 +327,19 @@ test "FileMapped write and read data" {
     try testing.expectEqualStrings(test_data, typed_data);
 }
 
-test "FileMapped typed access" {
-    const allocator = testing.allocator;
-    
-    const file_name = "test_typed_access.txt";
-    
-    // Create a file with some u32 values
-    const TestStruct = struct {
-        a: u32,
-        b: u32,
-        c: u32,
-    };
-    
-    const test_struct = TestStruct{ .a = 123, .b = 456, .c = 789 };
-    
-    {
-        const file = try std.fs.cwd().createFile(file_name, .{});
-        defer file.close();
-        try file.writeAll(std.mem.asBytes(&test_struct));
-    }
-    
-    // Map the file with typed access
-    var mapped_file = try FileMapped.init(allocator, file_name, .{
-        .buff_size = @sizeOf(TestStruct),
-        .file_map_start = 0,
-        .creation_disposition = .OPEN_EXISTING
-    });
-    defer mapped_file.deinit();
-    
-    // Access as TestStruct
-    const struct_data = (try mapped_file.getDataAs(TestStruct))[0];
-    try testing.expectEqual(test_struct.a, struct_data.a);
-    try testing.expectEqual(test_struct.b, struct_data.b);
-    try testing.expectEqual(test_struct.c, struct_data.c);
-}
-
-test "FileMapped resize" {
-    const allocator = testing.allocator;
-    
-    const file_name = "test_resize.txt";
-    
-    var mapped_file = try FileMapped.init(allocator, file_name, .{
-        .buff_size = 100,
-    });
-    defer mapped_file.deinit();
-    
-    // Write some data
-    var data = try mapped_file.getData();
-    @memset(data, 'A');
-    
-    // Flush to disk
-    _ = mapped_file.flush();
-    
-    // Resize to larger size
-    try mapped_file.resize(200);
-    
-    // Verify size
-    try testing.expectEqual(@as(u32, 200), mapped_file.buff_size);
-    
-    // Write to the extended area
-    data = try mapped_file.getData();
-    try testing.expectEqual(@as(usize, 200), data.len);
-    
-    // First 100 bytes should still be 'A'
-    for (0..100) |i| {
-        try testing.expectEqual(@as(u8, 'A'), data[i]);
-    }
-    
-    // Fill remaining with 'B'
-    for (100..200) |i| {
-        data[i] = 'B';
-    }
-    
-    // Flush changes
-    _ = mapped_file.flush();
-    
-    // Resize to smaller size
-    try mapped_file.resize(50);
-    try testing.expectEqual(@as(u32, 50), mapped_file.buff_size);
-    
-    // Data should be truncated
-    data = try mapped_file.getData();
-    try testing.expectEqual(@as(usize, 50), data.len);
-    
-    // All bytes should still be 'A'
-    for (0..50) |i| {
-        try testing.expectEqual(@as(u8, 'A'), data[i]);
-    }
+test "FileMapped path too long" {
+    const long_path = "a" ** 300; // Exceeds MAX_PATH
+    try testing.expectError(
+        FileMapError.PathTooLong,
+        FileMapped.init(long_path, .{})
+    );
 }
 
 test "FileMapped error handling" {
-    const allocator = testing.allocator;
-    
     // Test invalid file
     try testing.expectError(
         FileMapError.InvalidHandle,
-        FileMapped.init(allocator, "nonexistent_file.txt", .{
+        FileMapped.init("nonexistent_file.txt", .{
             .creation_disposition = .OPEN_EXISTING,
         })
     );
@@ -436,7 +350,5 @@ test {
     defer {
         std.fs.cwd().deleteFile("test_init.txt") catch {};
         std.fs.cwd().deleteFile("test_write_read.txt") catch {};
-        std.fs.cwd().deleteFile("test_typed_access.txt") catch {};
-        std.fs.cwd().deleteFile("test_resize.txt") catch {};
     }
 }

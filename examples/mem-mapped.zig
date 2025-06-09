@@ -2,11 +2,6 @@ const std = @import("std");
 const zwin = @import("zwin");
 
 pub fn main() !void {
-    // Initialize memory allocator
-    var gpa = std.heap.DebugAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
     const file_name = "test_write_read.txt";
     const test_data = "Hello, Memory Mapped World!";
     {
@@ -16,7 +11,7 @@ pub fn main() !void {
     }
 
     // Map the file
-    var mapped_file = try zwin.FileMapped.init(allocator, file_name, .{
+    var mapped_file = try zwin.FileMapped.init(file_name, .{
         .buff_size = @intCast(test_data.len),
         .file_map_start = 0,
         .creation_disposition = .OPEN_EXISTING
