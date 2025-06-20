@@ -69,6 +69,7 @@ pub fn main() !void {
     const path_w = try windows.sliceToPrefixedFileW(dir.fd, file_name);
     // the file to be manipulated
     const lpcTheFile = path_w.span();
+    // const lpcTheFile = std.mem.sliceTo(&path_w.data, 0);
     try stdout.print("typeOf(lpcTheFile): {s}\n", .{@typeName(@TypeOf(lpcTheFile))});
     hFile = win32.CreateFileW(lpcTheFile, .{ .FILE_READ_DATA = 1, .FILE_WRITE_DATA = 1 }, win32.FILE_SHARE_READ, null, .CREATE_ALWAYS, win32.FILE_ATTRIBUTE_NORMAL, null);
     // close the file itself
