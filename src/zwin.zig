@@ -1,3 +1,4 @@
+pub const CheckBox = @import("check_box.zig");
 pub const ComPointer = @import("com_pointer.zig").ComPointer;
 pub const FileMapped = @import("file_mapped.zig");
 pub const DXContext = @import("./D3D/dx_context.zig");
